@@ -6,6 +6,9 @@ public class PlayerMovement : MonoBehaviour
     public float mouseSensitivity = 2f;
     public float gravity = -9.81f;
     public float jumpHeight = 2f; // How high the player jumps
+    public float fallMultiplier = 2.5f; // Stronger gravity when falling
+    public float lowJumpMultiplier = 2f; // Shorter jump when jump key released early
+    public float terminalVelocity = -53f; // ~Terminal velocity (m/s)
 
     public Transform cameraTransform; // Assign your camera here
 
@@ -47,10 +50,15 @@ public class PlayerMovement : MonoBehaviour
         Vector3 move = transform.right * moveX + transform.forward * moveZ;
         move *= moveSpeed;
 
-        // Gravity & Jump
+        // Gravity & Jump (snappier, more earth-like)
+        bool jumpPressed = Input.GetButton("Jump");
         if (controller.isGrounded)
         {
-            verticalVelocity = -1f; // Small downward force to keep grounded
+            // Small downward force to keep grounded (a bit stronger for stability)
+            if (verticalVelocity < 0f)
+            {
+                verticalVelocity = -2f;
+            }
 
             if (Input.GetButtonDown("Jump")) // Spacebar by default
             {
@@ -59,7 +67,24 @@ public class PlayerMovement : MonoBehaviour
         }
         else
         {
-            verticalVelocity += gravity * Time.deltaTime;
+            // Apply stronger gravity when falling, and cut jump short if button released
+            float g = gravity;
+            if (verticalVelocity < 0f)
+            {
+                g *= fallMultiplier;
+            }
+            else if (!jumpPressed)
+            {
+                g *= lowJumpMultiplier;
+            }
+
+            verticalVelocity += g * Time.deltaTime;
+
+            // Clamp to terminal velocity so the fall doesn't feel floaty
+            if (verticalVelocity < terminalVelocity)
+            {
+                verticalVelocity = terminalVelocity;
+            }
         }
 
         move.y = verticalVelocity;
