@@ -16,6 +16,9 @@ public class PlayerMovement : MonoBehaviour
     private float verticalVelocity; // For gravity & jumping
     private float cameraPitch = 0f; // For looking up/down
 
+    public bool alignUprightOnPortalExit = true;
+    public bool zeroAngularOnAlign = true;
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -90,5 +93,67 @@ public class PlayerMovement : MonoBehaviour
         move.y = verticalVelocity;
 
         controller.Move(move * Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Aligns this object so that Up = Vector3.up and Forward = (exit forward flattened on the horizontal plane).
+    /// Call this immediately after teleporting out of a portal.
+    /// </summary>
+    public void AlignAfterPortalExit(Quaternion exitRotation)
+    {
+        if (!alignUprightOnPortalExit) return;
+
+        // Determine desired horizontal forward based on exit orientation
+        Vector3 exitForward = exitRotation * Vector3.forward;
+        Vector3 flatForward = Vector3.ProjectOnPlane(exitForward, Vector3.up);
+        if (flatForward.sqrMagnitude < 1e-4f)
+        {
+            // Fallback: use current forward flattened
+            flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (flatForward.sqrMagnitude < 1e-4f)
+                flatForward = Vector3.forward; // absolute fallback
+        }
+        flatForward.Normalize();
+
+        Quaternion upright = Quaternion.LookRotation(flatForward, Vector3.up);
+
+        var cc = GetComponent<CharacterController>();
+        bool ccWasEnabled = false;
+        if (cc != null)
+        {
+            ccWasEnabled = cc.enabled;
+            cc.enabled = false;
+        }
+
+        var rb = GetComponent<Rigidbody>();
+        if (rb != null)
+        {
+            if (!rb.isKinematic && zeroAngularOnAlign)
+            {
+                rb.angularVelocity = Vector3.zero;
+            }
+            rb.MoveRotation(upright);
+        }
+        else
+        {
+            transform.rotation = upright;
+        }
+
+        if (cc != null)
+        {
+            cc.enabled = ccWasEnabled;
+        }
+    }
+
+    // Align upright and also reset camera pitch so the view is straight after exit
+    public void AlignAfterPortalExitAndResetView(Quaternion exitRotation)
+    {
+        AlignAfterPortalExit(exitRotation);
+        // Reset vertical look so you are looking straight ahead
+        cameraPitch = 0f;
+        if (cameraTransform != null)
+        {
+            cameraTransform.localRotation = Quaternion.Euler(0f, 0f, 0f);
+        }
     }
 }

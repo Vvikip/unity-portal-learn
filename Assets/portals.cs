@@ -89,11 +89,48 @@ public class Portals : MonoBehaviour
             cc.enabled = false;
         }
 
-        cc.transform.SetPositionAndRotation(destPos, destRot);
+        // IMPORTANT: Prefer CharacterController path if present (common FPS setup)
+        if (cc != null)
+        {
+            // CharacterController path (set on the CC owner transform)
+            cc.transform.SetPositionAndRotation(destPos, destRot);
+        }
+        else if (rb != null)
+        {
+            // Rigidbody path
+            if (!rb.isKinematic)
+            {
+                rb.linearVelocity = Vector3.zero;      // only valid for non-kinematic bodies
+                rb.angularVelocity = Vector3.zero;
+            }
+            rb.MovePosition(destPos);
+            rb.MoveRotation(destRot);
+        }
+        else
+        {
+            // Fallback direct transform move
+            target.SetPositionAndRotation(destPos, destRot);
+        }
 
         if (cc != null)
         {
             cc.enabled = ccWasEnabled;
+            // Nudge CC to update its internal state post-teleport
+            cc.Move(Vector3.zero);
+        }
+
+        // Ensure physics and transforms are up to date after the snap
+        Physics.SyncTransforms();
+
+        // Align player upright after exiting the portal (preserve yaw from exit)
+        var movement = target.GetComponentInParent<PlayerMovement>();
+        if (movement != null)
+        {
+            movement.AlignAfterPortalExit(destRot);
+        }
+        else
+        {
+            Debug.LogWarning($"[Portal] No PlayerMovement found on '{target.name}' or its parents. Upright alignment was skipped.");
         }
     }
 }
