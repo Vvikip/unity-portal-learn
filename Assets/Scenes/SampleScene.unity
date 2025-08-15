@@ -730,7 +730,7 @@ MonoBehaviour:
   teleportTag: Player
   reenterBlockTime: 0.3
   requireTagMatch: 0
-  entryPlane: {fileID: 339825602}
+  teleportKey: 116
 --- !u!136 &589225452
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -816,7 +816,7 @@ Transform:
   m_GameObject: {fileID: 589225450}
   serializedVersion: 2
   m_LocalRotation: {x: 1, y: 0, z: 0, w: 0}
-  m_LocalPosition: {x: 2.2075958, y: 2.169, z: 9.213}
+  m_LocalPosition: {x: 2.2075958, y: 2.169, z: 7.79}
   m_LocalScale: {x: 1.1018, y: 1.1298, z: 0.022334}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -909,7 +909,7 @@ MonoBehaviour:
   teleportTag: Player
   reenterBlockTime: 0.3
   requireTagMatch: 0
-  entryPlane: {fileID: 1556655693}
+  teleportKey: 116
 --- !u!136 &1045131664
 CapsuleCollider:
   m_ObjectHideFlags: 0
@@ -995,7 +995,7 @@ Transform:
   m_GameObject: {fileID: 1045131662}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 4.206, y: 8.252, z: -9.11}
+  m_LocalPosition: {x: 4.206, y: 8.252, z: -7.08}
   m_LocalScale: {x: 1.1018, y: 1.1298, z: 0.022334}
   m_ConstrainProportionsScale: 0
   m_Children:

@@ -12,10 +12,6 @@ public class Portals : MonoBehaviour
     public float reenterBlockTime = 0.25f;    // Time to ignore collisions post-teleport
     public bool requireTagMatch = false;      // If true, only teleport when tag matches
 
-    public KeyCode teleportKey = KeyCode.T; // Key to trigger teleportation 
-
-    [Header("Optional Overrides")]
-
     private float lastTeleportTime = -999f;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
@@ -27,29 +23,37 @@ public class Portals : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        if (Input.GetKeyDown(teleportKey)) 
+        // Input-based teleport disabled; using trigger-based teleport in OnTriggerEnter
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        if (linkedPortal == null)
         {
-            if (linkedPortal == null)
-            {
-                Debug.LogWarning($"[Portal] {name}: linkedPortal is not set.");
-                return;
-            }
+            Debug.LogWarning($"[Portal] {name}: linkedPortal is not set.");
+            return;
+        }
 
-            // Find player
-            Transform player = GameObject.FindGameObjectWithTag(teleportTag)?.transform;
+        // Cooldown to avoid immediate re-entry loop
+        if (Time.time - lastTeleportTime < reenterBlockTime)
+            return;
+        if (Time.time - linkedPortal.lastTeleportTime < linkedPortal.reenterBlockTime)
+            return;
 
-            if (player == null)
-            {
-                Debug.LogWarning($"[Portal] {name}: No player found. Set 'playerOverride' or ensure a GameObject is tagged '{teleportTag}'.");
-                return;
-            }
+        // Optional tag filter
+        if (requireTagMatch && !other.CompareTag(teleportTag))
+            return;
 
-            // Resolve the root object that actually moves (controller or rigidbody owner)
-            Transform playerRoot = ResolvePlayerRoot(player);
+        Transform target = ResolvePlayerRoot(other.transform);
+        if (target == null)
+            return;
 
-            Debug.Log($"[Portal] {name}: Teleporting '{playerRoot.name}' to {linkedPortal.name}");
-            TeleportPlayer(playerRoot);
-        } 
+        Debug.Log($"[Portal] {name}: Triggered by '{other.name}'. Teleporting '{target.name}' to {linkedPortal.name}");
+        TeleportPlayer(target);
+
+        // Set cooldown on both portals to prevent ping-pong
+        lastTeleportTime = Time.time;
+        linkedPortal.lastTeleportTime = Time.time;
     }
 
     private Transform ResolvePlayerRoot(Transform t)
@@ -69,12 +73,9 @@ public class Portals : MonoBehaviour
         if (linkedPortal == null || target == null)
             return;
 
-        Transform testPortal = GameObject.FindGameObjectWithTag("testPortal")?.transform;
-
-
         // Compute exit pose (a bit in front of the linked portal)
-        Vector3 destPos = testPortal.transform.position + testPortal.transform.forward * exitOffset;
-        Quaternion destRot = testPortal.transform.rotation;
+        Vector3 destPos = linkedPortal.transform.position + linkedPortal.transform.forward * exitOffset;
+        Quaternion destRot = linkedPortal.transform.rotation;
 
         // Handle common controllers safely
         var cc = target.GetComponent<CharacterController>();
@@ -94,8 +95,5 @@ public class Portals : MonoBehaviour
         {
             cc.enabled = ccWasEnabled;
         }
-
-        lastTeleportTime = Time.time;
     }
-
 }
