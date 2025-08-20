@@ -26,6 +26,39 @@ public class Portals : MonoBehaviour
         // Input-based teleport disabled; using trigger-based teleport in OnTriggerEnter
     }
 
+    /// <summary>
+    /// Given a world-space origin and direction that are arriving at this portal,
+    /// compute the corresponding exit origin and direction at the linked portal.
+    /// Returns false if no linked portal.
+    /// </summary>
+    /// <param name="inWorldOrigin">World point near/on the entrance portal surface (e.g., RaycastHit.point)</param>
+    /// <param name="inWorldDir">World direction of incoming ray</param>
+    /// <param name="epsilon">Small forward offset from the exit portal plane to avoid immediate self-hit</param>
+    /// <param name="outWorldOrigin">Computed world origin at exit</param>
+    /// <param name="outWorldDir">Computed world direction at exit</param>
+    public bool TransformRayThroughPortal(Vector3 inWorldOrigin, Vector3 inWorldDir, float epsilon, out Vector3 outWorldOrigin, out Vector3 outWorldDir)
+    {
+        outWorldOrigin = Vector3.zero;
+        outWorldDir = Vector3.forward;
+        if (linkedPortal == null)
+            return false;
+
+        // Map point through: to entrance local, flip 180° around local Up, then to exit world
+        Vector3 localPoint = transform.InverseTransformPoint(inWorldOrigin);
+        Vector3 flippedLocalPoint = Quaternion.Euler(0f, 180f, 0f) * localPoint;
+        Vector3 exitPoint = linkedPortal.transform.TransformPoint(flippedLocalPoint);
+
+        // Map direction similarly
+        Vector3 localDir = transform.InverseTransformDirection(inWorldDir);
+        Vector3 flippedLocalDir = Quaternion.Euler(0f, 180f, 0f) * localDir;
+        Vector3 exitDir = linkedPortal.transform.TransformDirection(flippedLocalDir).normalized;
+
+        // Push slightly forward along exit normal and along exitDir to avoid re-hitting the exit portal
+        outWorldOrigin = exitPoint + linkedPortal.transform.forward * Mathf.Max(epsilon, 0.001f);
+        outWorldDir = exitDir;
+        return true;
+    }
+
     private void OnTriggerEnter(Collider other)
     {
         if (linkedPortal == null)

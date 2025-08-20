@@ -7,6 +7,8 @@ public class PickupController : MonoBehaviour
     public float pickupRange = 3.0f;
     public float holdDistance = 2.0f;
     public bool alignWithCamera = true;
+    [Tooltip("Key to pick up / drop objects")]
+    public KeyCode pickupKey = KeyCode.E;
 
     [Header("Held Object Physics Override")]
     public bool makeKinematicWhileHeld = true;
@@ -44,7 +46,7 @@ public class PickupController : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(KeyCode.E))
+        if (Input.GetKeyDown(pickupKey))
         {
             if (IsHolding)
                 Drop();
