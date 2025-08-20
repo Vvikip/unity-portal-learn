@@ -39,6 +39,12 @@ public class lasers : MonoBehaviour
     // Pool of LineRenderers to render discontinuous segments (to avoid connecting line between portals)
     private readonly List<LineRenderer> segmentLines = new List<LineRenderer>();
 
+    [Header("Damage")]
+    [Tooltip("Damage per second applied when the laser's final impact is on the player.")]
+    public float damagePerSecond = 5f;
+    [Tooltip("Tag used to identify the player for damage application.")]
+    public string playerTag = "Player";
+
     void Awake()
     {
         if (emitter == null) emitter = transform;
@@ -100,6 +106,7 @@ public class lasers : MonoBehaviour
 
         int traversals = 0;
         bool continueTracing = true;
+        Health finalHitHealth = null;
         while (continueTracing && remaining > 0f)
         {
             QueryTriggerInteraction qti = includeTriggerColliders ? QueryTriggerInteraction.Collide : QueryTriggerInteraction.Ignore;
@@ -146,6 +153,15 @@ public class lasers : MonoBehaviour
                 }
 
                 // Hit a normal object or cannot traverse further
+                // Capture potential damage target (prefer Health on the collider's parents)
+                var h = hit.collider.GetComponentInParent<Health>();
+                if (h != null)
+                {
+                    // Damage only if tagged as player (if a tag is specified)
+                    bool isPlayer = string.IsNullOrEmpty(playerTag) || h.gameObject.CompareTag(playerTag) || hit.collider.CompareTag(playerTag);
+                    if (isPlayer)
+                        finalHitHealth = h;
+                }
                 continueTracing = false;
             }
             else
@@ -162,6 +178,12 @@ public class lasers : MonoBehaviour
         }
 
         DrawSegments(segStarts, segEnds);
+
+        // Apply damage if we ended on a valid player target
+        if (finalHitHealth != null && damagePerSecond > 0f)
+        {
+            finalHitHealth.ApplyDamage(damagePerSecond * Time.deltaTime);
+        }
     }
 
     private void DrawSegments(List<Vector3> starts, List<Vector3> ends)
