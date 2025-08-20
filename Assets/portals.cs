@@ -81,6 +81,25 @@ public class Portals : MonoBehaviour
         var cc = target.GetComponent<CharacterController>();
         var rb = target.GetComponent<Rigidbody>();
 
+        // Capture incoming world velocity to preserve momentum
+        Vector3 inVel = Vector3.zero;
+        if (rb != null)
+        {
+            inVel = rb.linearVelocity;
+        }
+        else if (cc != null)
+        {
+            inVel = cc.velocity; // CharacterController exposes last Move velocity (world space)
+        }
+
+        // Transform velocity from entrance portal space to exit portal space with a flip
+        // 1) to portal-local
+        Vector3 localVel = transform.InverseTransformDirection(inVel);
+        // 2) flip through the portal plane (180° around local Up)
+        localVel = Quaternion.Euler(0f, 180f, 0f) * localVel;
+        // 3) back to world using the linked portal's frame
+        Vector3 outVel = linkedPortal.transform.TransformDirection(localVel);
+
         // Temporarily disable CC to set position cleanly
         bool ccWasEnabled = false;
         if (cc != null)
@@ -100,7 +119,7 @@ public class Portals : MonoBehaviour
             // Rigidbody path
             if (!rb.isKinematic)
             {
-                rb.linearVelocity = Vector3.zero;      // only valid for non-kinematic bodies
+                // Do not zero velocity; we will set the transformed velocity below
                 rb.angularVelocity = Vector3.zero;
             }
             rb.MovePosition(destPos);
@@ -122,11 +141,29 @@ public class Portals : MonoBehaviour
         // Ensure physics and transforms are up to date after the snap
         Physics.SyncTransforms();
 
-        // Align player upright after exiting the portal (preserve yaw from exit)
-        var movement = target.GetComponentInParent<PlayerMovement>();
-        if (movement != null)
+        // Apply preserved momentum
+        if (rb != null && !rb.isKinematic)
         {
-            movement.AlignAfterPortalExit(destRot);
+            rb.linearVelocity = outVel;
+        }
+        else if (cc != null)
+        {
+            var movement = target.GetComponentInParent<PlayerMovement>();
+            if (movement != null)
+            {
+                movement.ReceivePortalMomentum(outVel);
+            }
+            else
+            {
+                Debug.LogWarning($"[Portal] No PlayerMovement found on '{target.name}' to receive momentum.");
+            }
+        }
+
+        // Align player upright after exiting the portal (preserve yaw from exit)
+        var movementAlign = target.GetComponentInParent<PlayerMovement>();
+        if (movementAlign != null)
+        {
+            movementAlign.AlignAfterPortalExit(destRot);
         }
         else
         {

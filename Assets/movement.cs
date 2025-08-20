@@ -19,6 +19,13 @@ public class PlayerMovement : MonoBehaviour
     public bool alignUprightOnPortalExit = true;
     public bool zeroAngularOnAlign = true;
 
+    // Portal momentum preservation (CharacterController)
+    [Header("Portal Momentum")]
+    [Tooltip("Time to preserve injected momentum after exiting a portal (seconds)")]
+    public float portalMomentumPreserveTime = 0.15f;
+    private float portalMomentumTimer = 0f;
+    private Vector3 portalHorizVel = Vector3.zero; // world-space horizontal velocity to add during timer
+
     void Start()
     {
         controller = GetComponent<CharacterController>();
@@ -53,12 +60,24 @@ public class PlayerMovement : MonoBehaviour
         Vector3 move = transform.right * moveX + transform.forward * moveZ;
         move *= moveSpeed;
 
+        // Apply preserved horizontal velocity from portal while timer is active
+        if (portalMomentumTimer > 0f)
+        {
+            Vector3 extra = new Vector3(portalHorizVel.x, 0f, portalHorizVel.z);
+            move += extra;
+            portalMomentumTimer -= Time.deltaTime;
+            if (portalMomentumTimer <= 0f)
+            {
+                portalHorizVel = Vector3.zero;
+            }
+        }
+
         // Gravity & Jump (snappier, more earth-like)
         bool jumpPressed = Input.GetButton("Jump");
         if (controller.isGrounded)
         {
-            // Small downward force to keep grounded (a bit stronger for stability)
-            if (verticalVelocity < 0f)
+            // Avoid immediately killing post-portal vertical momentum
+            if (verticalVelocity < 0f && portalMomentumTimer <= 0f)
             {
                 verticalVelocity = -2f;
             }
@@ -93,6 +112,29 @@ public class PlayerMovement : MonoBehaviour
         move.y = verticalVelocity;
 
         controller.Move(move * Time.deltaTime);
+    }
+
+    /// <summary>
+    /// Called by a portal to inject a new world-space velocity when using CharacterController.
+    /// Preserves horizontal momentum and sets vertical component, blending with next update.
+    /// </summary>
+    public void ReceivePortalMomentum(Vector3 worldVelocity)
+    {
+        // Project world velocity into our local space to maintain player-relative input feeling
+        Vector3 local = transform.InverseTransformDirection(worldVelocity);
+
+        // Set vertical velocity directly so gravity continues from this new value
+        verticalVelocity = worldVelocity.y;
+
+        // Start preservation window for horizontal speed
+        portalMomentumTimer = portalMomentumPreserveTime;
+        portalHorizVel = new Vector3(worldVelocity.x, 0f, worldVelocity.z);
+
+        // Immediate nudge to sync controller's internal velocity reference this frame
+        Vector3 horizWorld = transform.TransformDirection(new Vector3(local.x, 0f, local.z));
+        Vector3 delta = horizWorld * Time.deltaTime;
+        delta.y += 0f; // vertical already handled via verticalVelocity in next Update
+        controller.Move(delta);
     }
 
     /// <summary>
