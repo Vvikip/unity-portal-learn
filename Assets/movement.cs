@@ -19,6 +19,8 @@ public class PlayerMovement : MonoBehaviour
 
     public bool alignUprightOnPortalExit = true;
     public bool zeroAngularOnAlign = true;
+    [Tooltip("If true, player's body is kept perfectly upright (no roll) every frame.")]
+    public bool forceUprightAlways = true;
 
     // Portal momentum preservation (CharacterController)
     [Header("Portal Momentum")]
@@ -40,6 +42,28 @@ public class PlayerMovement : MonoBehaviour
     {
         HandleMouseLook();
         HandleMovement();
+    }
+
+    void LateUpdate()
+    {
+        if (forceUprightAlways)
+        {
+            // Rebuild rotation to keep Up = world up while preserving yaw
+            Vector3 flatForward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (flatForward.sqrMagnitude < 1e-4f) flatForward = Vector3.forward;
+            Quaternion upright = Quaternion.LookRotation(flatForward.normalized, Vector3.up);
+
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic)
+            {
+                rb.angularVelocity = Vector3.zero;
+                rb.MoveRotation(upright);
+            }
+            else
+            {
+                transform.rotation = upright;
+            }
+        }
     }
 
     void HandleMouseLook()

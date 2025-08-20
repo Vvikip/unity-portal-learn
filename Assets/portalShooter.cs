@@ -12,6 +12,10 @@ public class PortalShooter : MonoBehaviour
     [Tooltip("The second portal (e.g., Orange)")] 
     public Portals portalB;                // Drag the Portal B GameObject
 
+    [Header("Interaction")]
+    [Tooltip("Reference to the pickup controller to disable shooting while holding objects")]
+    public PickupController pickup;
+
     [Header("Placement Settings")]
     public float maxShootDistance = 200f;
     [Tooltip("Slight offset from the hit surface to avoid z-fighting/overlap")] 
@@ -38,6 +42,10 @@ public class PortalShooter : MonoBehaviour
 
     private void Update()
     {
+        // Block portal shooting while holding an object
+        if (pickup != null && pickup.IsHolding)
+            return;
+
         if (Input.GetMouseButtonDown(0))
         {
             TryPlacePortal(portalA);
@@ -56,10 +64,16 @@ public class PortalShooter : MonoBehaviour
         Ray ray = new Ray(aimCamera.transform.position, aimCamera.transform.forward);
         if (Physics.Raycast(ray, out RaycastHit hit, maxShootDistance, placementMask, QueryTriggerInteraction.Ignore))
         {
-            // Keep portal visually upright relative to camera while aligning forward to surface normal
+            // Keep portal upright relative to world on walls; allow tilt only from the surface slope
             Vector3 alignNormal = hit.normal;
-            Vector3 up = Vector3.ProjectOnPlane(aimCamera.transform.up, alignNormal).normalized;
-            if (up.sqrMagnitude < 1e-4f) up = Vector3.up; // fallback
+            // Use world up projected onto the hit plane to avoid diagonal roll on vertical walls
+            Vector3 up = Vector3.ProjectOnPlane(Vector3.up, alignNormal).normalized;
+            if (up.sqrMagnitude < 1e-4f)
+            {
+                // Surface nearly horizontal (floor/ceiling). Derive a stable up from camera right projected onto the plane
+                up = Vector3.ProjectOnPlane(aimCamera.transform.right, alignNormal).normalized;
+                if (up.sqrMagnitude < 1e-4f) up = Vector3.forward; // final fallback
+            }
             Quaternion rot = Quaternion.LookRotation(alignNormal, up);
 
             Vector3 pos = hit.point + alignNormal * surfaceOffset;
