@@ -73,24 +73,34 @@ public class Portals : MonoBehaviour
         if (linkedPortal == null || target == null)
             return;
 
-        // Compute exit pose (a bit in front of the linked portal)
-        Vector3 destPos = linkedPortal.transform.position + linkedPortal.transform.forward * exitOffset;
-        Quaternion destRot = linkedPortal.transform.rotation;
-
         // Handle common controllers safely
         var cc = target.GetComponent<CharacterController>();
         var rb = target.GetComponent<Rigidbody>();
 
-        // Capture incoming world velocity to preserve momentum
+        // Compute exit pose (a bit in front of the linked portal). If CC present, ensure we place beyond its radius
+        float exitClearance = exitOffset;
+        if (cc != null)
+        {
+            exitClearance = Mathf.Max(exitOffset, cc.radius + 0.2f);
+        }
+        Vector3 destPos = linkedPortal.transform.position + linkedPortal.transform.forward * exitClearance;
+        Quaternion destRot = linkedPortal.transform.rotation;
+
+        // Capture incoming world velocity to preserve momentum (pick best available)
         Vector3 inVel = Vector3.zero;
-        if (rb != null)
-        {
-            inVel = rb.linearVelocity;
-        }
-        else if (cc != null)
-        {
-            inVel = cc.velocity; // CharacterController exposes last Move velocity (world space)
-        }
+        string velSource = "None";
+        var pm = target.GetComponentInParent<PlayerMovement>();
+
+        Vector3 rbVel = (rb != null && !rb.isKinematic) ? rb.velocity : Vector3.zero;
+        Vector3 pmVel = (pm != null) ? pm.CurrentWorldVelocity : Vector3.zero;
+        Vector3 ccVel = (cc != null) ? cc.velocity : Vector3.zero;
+
+        // Choose the largest magnitude
+        inVel = rbVel; velSource = (rbVel != Vector3.zero) ? "RB" : "None";
+        if (pmVel.sqrMagnitude > inVel.sqrMagnitude)
+        { inVel = pmVel; velSource = "PM"; }
+        if (ccVel.sqrMagnitude > inVel.sqrMagnitude)
+        { inVel = ccVel; velSource = "CC"; }
 
         // Transform velocity from entrance portal space to exit portal space with a flip
         // 1) to portal-local
@@ -99,6 +109,7 @@ public class Portals : MonoBehaviour
         localVel = Quaternion.Euler(0f, 180f, 0f) * localVel;
         // 3) back to world using the linked portal's frame
         Vector3 outVel = linkedPortal.transform.TransformDirection(localVel);
+        Debug.Log($"[Portal] Momentum: src={velSource} in {inVel} (mag {inVel.magnitude:F2}) -> out {outVel} (mag {outVel.magnitude:F2})");
 
         // Temporarily disable CC to set position cleanly
         bool ccWasEnabled = false;
@@ -144,7 +155,8 @@ public class Portals : MonoBehaviour
         // Apply preserved momentum
         if (rb != null && !rb.isKinematic)
         {
-            rb.linearVelocity = outVel;
+            rb.velocity = outVel; // use velocity to avoid API updater creating duplicate scripts
+            Debug.Log($"[Portal] Applied RB velocity: {outVel}");
         }
         else if (cc != null)
         {
@@ -152,6 +164,7 @@ public class Portals : MonoBehaviour
             if (movement != null)
             {
                 movement.ReceivePortalMomentum(outVel);
+                Debug.Log($"[Portal] Applied CC momentum to PlayerMovement: {outVel}, grounded={cc.isGrounded}");
             }
             else
             {

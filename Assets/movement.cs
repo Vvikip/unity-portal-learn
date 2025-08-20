@@ -15,6 +15,7 @@ public class PlayerMovement : MonoBehaviour
     private CharacterController controller;
     private float verticalVelocity; // For gravity & jumping
     private float cameraPitch = 0f; // For looking up/down
+    public Vector3 CurrentWorldVelocity { get; private set; } = Vector3.zero; // tracked per frame
 
     public bool alignUprightOnPortalExit = true;
     public bool zeroAngularOnAlign = true;
@@ -110,6 +111,9 @@ public class PlayerMovement : MonoBehaviour
         }
 
         move.y = verticalVelocity;
+
+        // Track world-space velocity for this frame before Move (approximate intended velocity)
+        CurrentWorldVelocity = move;
 
         controller.Move(move * Time.deltaTime);
     }
