@@ -22,10 +22,13 @@ public class PlayerMovement : MonoBehaviour
 
     // Portal momentum preservation (CharacterController)
     [Header("Portal Momentum")]
-    [Tooltip("Time to preserve injected momentum after exiting a portal (seconds)")]
-    public float portalMomentumPreserveTime = 0.15f;
-    private float portalMomentumTimer = 0f;
-    private Vector3 portalHorizVel = Vector3.zero; // world-space horizontal velocity to add during timer
+    [Tooltip("Horizontal momentum applied after exiting a portal is persisted here with damping.")]
+    public float externalAirDamping = 0.5f;   // smaller = lasts longer in air
+    public float externalGroundDamping = 10f; // higher = stops quickly on ground
+    [Tooltip("Time window to ignore grounded snap that would zero vertical velocity (s)")]
+    public float portalVerticalSnapGrace = 0.25f;
+    private float verticalGraceTimer = 0f;
+    private Vector3 externalVelocity = Vector3.zero; // world-space; we only use XZ
 
     void Start()
     {
@@ -61,24 +64,16 @@ public class PlayerMovement : MonoBehaviour
         Vector3 move = transform.right * moveX + transform.forward * moveZ;
         move *= moveSpeed;
 
-        // Apply preserved horizontal velocity from portal while timer is active
-        if (portalMomentumTimer > 0f)
-        {
-            Vector3 extra = new Vector3(portalHorizVel.x, 0f, portalHorizVel.z);
-            move += extra;
-            portalMomentumTimer -= Time.deltaTime;
-            if (portalMomentumTimer <= 0f)
-            {
-                portalHorizVel = Vector3.zero;
-            }
-        }
+        // Apply persistent external (portal) horizontal velocity
+        move += new Vector3(externalVelocity.x, 0f, externalVelocity.z);
 
         // Gravity & Jump (snappier, more earth-like)
         bool jumpPressed = Input.GetButton("Jump");
         if (controller.isGrounded)
         {
-            // Avoid immediately killing post-portal vertical momentum
-            if (verticalVelocity < 0f && portalMomentumTimer <= 0f)
+            // Small downward force to keep grounded (a bit stronger for stability)
+            // Avoid immediately killing post-portal vertical momentum within grace window
+            if (verticalVelocity < 0f && verticalGraceTimer <= 0f)
             {
                 verticalVelocity = -2f;
             }
@@ -115,6 +110,15 @@ public class PlayerMovement : MonoBehaviour
         // Track world-space velocity for this frame before Move (approximate intended velocity)
         CurrentWorldVelocity = move;
 
+        // Dampen external horizontal velocity
+        float damp = controller.isGrounded ? externalGroundDamping : externalAirDamping;
+        Vector3 horiz = new Vector3(externalVelocity.x, 0f, externalVelocity.z);
+        Vector3 damped = Vector3.MoveTowards(horiz, Vector3.zero, damp * Time.deltaTime);
+        externalVelocity = new Vector3(damped.x, 0f, damped.z);
+
+        // Update vertical grace timer
+        if (verticalGraceTimer > 0f) verticalGraceTimer -= Time.deltaTime;
+
         controller.Move(move * Time.deltaTime);
     }
 
@@ -130,9 +134,9 @@ public class PlayerMovement : MonoBehaviour
         // Set vertical velocity directly so gravity continues from this new value
         verticalVelocity = worldVelocity.y;
 
-        // Start preservation window for horizontal speed
-        portalMomentumTimer = portalMomentumPreserveTime;
-        portalHorizVel = new Vector3(worldVelocity.x, 0f, worldVelocity.z);
+        // Persist horizontal speed externally; vertical handled via verticalVelocity
+        externalVelocity = new Vector3(worldVelocity.x, 0f, worldVelocity.z);
+        verticalGraceTimer = portalVerticalSnapGrace;
 
         // Immediate nudge to sync controller's internal velocity reference this frame
         Vector3 horizWorld = transform.TransformDirection(new Vector3(local.x, 0f, local.z));

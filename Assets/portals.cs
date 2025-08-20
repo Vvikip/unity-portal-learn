@@ -91,7 +91,7 @@ public class Portals : MonoBehaviour
         string velSource = "None";
         var pm = target.GetComponentInParent<PlayerMovement>();
 
-        Vector3 rbVel = (rb != null && !rb.isKinematic) ? rb.velocity : Vector3.zero;
+        Vector3 rbVel = (rb != null && !rb.isKinematic) ? rb.linearVelocity : Vector3.zero;
         Vector3 pmVel = (pm != null) ? pm.CurrentWorldVelocity : Vector3.zero;
         Vector3 ccVel = (cc != null) ? cc.velocity : Vector3.zero;
 
@@ -155,7 +155,7 @@ public class Portals : MonoBehaviour
         // Apply preserved momentum
         if (rb != null && !rb.isKinematic)
         {
-            rb.velocity = outVel; // use velocity to avoid API updater creating duplicate scripts
+            rb.linearVelocity = outVel; // use velocity to avoid API updater creating duplicate scripts
             Debug.Log($"[Portal] Applied RB velocity: {outVel}");
         }
         else if (cc != null)
