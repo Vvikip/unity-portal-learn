@@ -36,6 +36,9 @@ public class lasers : MonoBehaviour
     [Tooltip("If true, logs laser hits and portal traversals to the Console.")]
     public bool debugLogs = false;
 
+    // Pool of LineRenderers to render discontinuous segments (to avoid connecting line between portals)
+    private readonly List<LineRenderer> segmentLines = new List<LineRenderer>();
+
     void Awake()
     {
         if (emitter == null) emitter = transform;
@@ -64,6 +67,10 @@ public class lasers : MonoBehaviour
         }
         line.startColor = Color.red;
         line.endColor = Color.red;
+
+        // Initialize segment pool with the primary line
+        if (segmentLines.Count == 0)
+            segmentLines.Add(line);
     }
 
     void Update()
@@ -87,8 +94,9 @@ public class lasers : MonoBehaviour
         Vector3 dir = emitter.forward;
         float remaining = maxDistance;
 
-        List<Vector3> points = new List<Vector3>(2 + maxPortalPasses);
-        points.Add(origin);
+        // Build segments as start->end pairs
+        List<Vector3> segStarts = new List<Vector3>(1 + maxPortalPasses);
+        List<Vector3> segEnds = new List<Vector3>(1 + maxPortalPasses);
 
         int traversals = 0;
         bool continueTracing = true;
@@ -97,7 +105,9 @@ public class lasers : MonoBehaviour
             QueryTriggerInteraction qti = includeTriggerColliders ? QueryTriggerInteraction.Collide : QueryTriggerInteraction.Ignore;
             if (Physics.Raycast(origin, dir, out RaycastHit hit, remaining, hitMask, qti))
             {
-                points.Add(hit.point);
+                // Add segment to the hit point (stops exactly at the portal or object)
+                segStarts.Add(origin);
+                segEnds.Add(hit.point);
                 if (debugLogs)
                 {
                     Debug.Log($"[Laser] Hit '{hit.collider.name}' at {hit.point} dist={hit.distance:F2} layer={hit.collider.gameObject.layer}");
@@ -121,17 +131,15 @@ public class lasers : MonoBehaviour
                         {
                             // Reduce remaining by traveled segment
                             remaining -= Vector3.Distance(origin, hit.point);
-                            // Advance
+                            // Start next segment from the exit portal
                             origin = outOrigin;
                             dir = outDir;
                             traversals++;
-                            // Insert the exit origin so the beam visually continues from the other portal
-                            points.Add(outOrigin);
                             if (debugLogs)
                             {
                                 Debug.Log($"[Laser] Traversed portal '{portal.name}' -> exit at {outOrigin}, dir {outDir}");
                             }
-                            // Continue tracing from the exit portal
+                            // Continue tracing from the exit portal without drawing a connector
                             continue;
                         }
                     }
@@ -143,37 +151,68 @@ public class lasers : MonoBehaviour
             else
             {
                 // No hit: extend to max
-                points.Add(origin + dir * remaining);
+                segStarts.Add(origin);
+                segEnds.Add(origin + dir * remaining);
                 if (debugLogs)
                 {
-                    Debug.Log($"[Laser] No hit. Extending to {points[points.Count-1]}");
+                    Debug.Log($"[Laser] No hit. Extending to {segEnds[segEnds.Count-1]}");
                 }
                 continueTracing = false;
             }
         }
 
-        DrawBeam(points);
+        DrawSegments(segStarts, segEnds);
     }
 
-    private void DrawBeam(List<Vector3> points)
+    private void DrawSegments(List<Vector3> starts, List<Vector3> ends)
     {
-        if (!line.enabled) line.enabled = true;
-        // Keep width updated in case changed at runtime
-        if (!Mathf.Approximately(line.startWidth, lineWidth))
+        int segmentCount = (starts != null && ends != null) ? Mathf.Min(starts.Count, ends.Count) : 0;
+
+        // Ensure pool size
+        while (segmentLines.Count < segmentCount)
         {
-            line.startWidth = lineWidth;
-            line.endWidth = lineWidth;
+            segmentLines.Add(CreateLineLike(line));
         }
-        if (points == null || points.Count < 2)
+
+        // Update active segments
+        for (int i = 0; i < segmentCount; i++)
         {
-            // Fallback to disable if something went wrong
-            line.enabled = false;
-            return;
+            var lr = segmentLines[i];
+            if (lr == null) continue;
+            if (!lr.enabled) lr.enabled = true;
+            if (!Mathf.Approximately(lr.startWidth, lineWidth))
+            {
+                lr.startWidth = lineWidth;
+                lr.endWidth = lineWidth;
+            }
+            lr.positionCount = 2;
+            lr.SetPosition(0, starts[i]);
+            lr.SetPosition(1, ends[i]);
         }
-        line.positionCount = points.Count;
-        for (int i = 0; i < points.Count; i++)
+
+        // Disable any unused renderers
+        for (int i = segmentCount; i < segmentLines.Count; i++)
         {
-            line.SetPosition(i, points[i]);
+            if (segmentLines[i] != null && segmentLines[i].enabled)
+                segmentLines[i].enabled = false;
         }
+    }
+
+    private LineRenderer CreateLineLike(LineRenderer template)
+    {
+        GameObject go = new GameObject("LaserSegment");
+        go.transform.SetParent(transform, false);
+        var lr = go.AddComponent<LineRenderer>();
+        lr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        lr.receiveShadows = false;
+        lr.textureMode = LineTextureMode.Stretch;
+        lr.alignment = LineAlignment.View;
+        lr.sharedMaterial = template != null ? template.sharedMaterial : new Material(Shader.Find("Sprites/Default"));
+        lr.startColor = template != null ? template.startColor : Color.red;
+        lr.endColor = template != null ? template.endColor : Color.red;
+        lr.startWidth = lineWidth;
+        lr.endWidth = lineWidth;
+        lr.enabled = false;
+        return lr;
     }
 }
